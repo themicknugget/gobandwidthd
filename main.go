@@ -30,9 +30,26 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 	}
 	defer handle.Close()
 
+	var ethLayer layers.Ethernet
+	var ip4Layer layers.IPv4
+	var ip6Layer layers.IPv6
+	var tcpLayer layers.TCP
+	var udpLayer layers.UDP
+	var icmp4Layer layers.ICMPv4
+	var icmp6Layer layers.ICMPv6
+
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ip4Layer, &ip6Layer, &tcpLayer, &udpLayer, &icmp4Layer, &icmp6Layer)
+	decodedLayers := make([]gopacket.LayerType, 0, 10)
+
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
-		processPacket(packet, device)
+		err := parser.DecodeLayers(packet.Data(), &decodedLayers)
+		if err != nil {
+			log.Printf("Error decoding packet: %v", err)
+			continue
+		}
+
+		processPacket(decodedLayers, &ethLayer, &ip4Layer, &ip6Layer, &tcpLayer, &udpLayer, &icmp4Layer, &icmp6Layer, device)
 	}
 }
 
@@ -68,23 +85,28 @@ func main() {
 	wg.Wait() // Wait for all packet capture goroutines to complete
 }
 
-func processPacket(packet gopacket.Packet, iface string) {
-	var metricIP, srcIP, dstIP, protocol string
+func processPacket(decodedLayers []gopacket.LayerType, eth *layers.Ethernet, ip4 *layers.IPv4, ip6 *layers.IPv6, tcp *layers.TCP, udp *layers.UDP, icmp4 *layers.ICMPv4, icmp6 *layers.ICMPv6, iface string) {
+	var srcIP, dstIP, protocol string
 	var packetSize float64
 
-	packetSize = float64(len(packet.Data()))
-
-	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	if ipLayer != nil {
-		ip, _ := ipLayer.(*layers.IPv4)
-		srcIP = ip.SrcIP.String()
-		dstIP = ip.DstIP.String()
-	} else {
-		ipLayer = packet.Layer(layers.LayerTypeIPv6)
-		if ipLayer != nil {
-			ip, _ := ipLayer.(*layers.IPv6)
-			srcIP = ip.SrcIP.String()
-			dstIP = ip.DstIP.String()
+	for _, layerType := range decodedLayers {
+		switch layerType {
+		case layers.LayerTypeIPv4:
+			srcIP = ip4.SrcIP.String()
+			dstIP = ip4.DstIP.String()
+			packetSize = float64(len(ip4.Payload))
+		case layers.LayerTypeIPv6:
+			srcIP = ip6.SrcIP.String()
+			dstIP = ip6.DstIP.String()
+			packetSize = float64(len(ip6.Payload))
+		case layers.LayerTypeTCP:
+			protocol = "tcp"
+		case layers.LayerTypeUDP:
+			protocol = "udp"
+		case layers.LayerTypeICMPv4:
+			protocol = "icmpv4"
+		case layers.LayerTypeICMPv6:
+			protocol = "icmpv6"
 		}
 	}
 
@@ -101,28 +123,10 @@ func processPacket(packet gopacket.Packet, iface string) {
 		return // Ignore this packet
 	}
 
-	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-		protocol = "tcp"
-	} else if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-		protocol = "udp"
-	} else if icmpLayer := packet.Layer(layers.LayerTypeICMPv4); icmpLayer != nil {
-		protocol = "icmpv4"
-	} else if icmpLayer := packet.Layer(layers.LayerTypeICMPv6); icmpLayer != nil {
-		protocol = "icmpv6"
-	} else {
-		protocol = "other"
-	}
-
 	queueDNSLookup(srcIP)
 	queueDNSLookup(dstIP)
 
-	if checkIPInSubnets(srcIP) {
-		metricIP = srcIP
-	} else if checkIPInSubnets(dstIP) {
-		metricIP = dstIP
-	} else {
-		fmt.Println("Neither ", srcIP, " or ", dstIP, " are in subnets")
-	}
+	metricIP := checkIPSubnetMembership(srcIP, dstIP)
 	packetsPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Inc()
 	bytesPerProtocolPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Add(packetSize)
 }
@@ -168,14 +172,22 @@ func getNetworkDetails(interfaceName string) {
 	return
 }
 
-// checkIPInSubnets checks if the provided IP address belongs to any of the subnets.
-func checkIPInSubnets(ip string) bool {
+// checkIPSubnetMembership checks if either the source or destination IP address belongs to any of the subnets.
+// It returns the IP that belongs to a subnet, or an empty string if neither do.
+func checkIPSubnetMembership(srcIP, dstIP string) string {
 	subnetsMu.RLock()
 	defer subnetsMu.RUnlock()
+
+	srcParsedIP := net.ParseIP(srcIP)
+	dstParsedIP := net.ParseIP(dstIP)
+
 	for _, subnet := range subnets {
-		if subnet.Contains(net.ParseIP(ip)) {
-			return true
+		if subnet.Contains(srcParsedIP) {
+			return srcIP
+		}
+		if subnet.Contains(dstParsedIP) {
+			return dstIP
 		}
 	}
-	return false
+	return ""
 }
