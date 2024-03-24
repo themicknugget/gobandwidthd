@@ -110,8 +110,10 @@ func processPacket(packet gopacket.Packet, iface string) {
 
 	if checkIPInSubnets(srcIP) {
 		metricIP = srcIP
-	} else {
+	} else if checkIPInSubnets(dstIP) {
 		metricIP = dstIP
+	} else {
+		fmt.Println("Neither ", srcIP, " or ", dstIP, " are in subnets")
 	}
 	packetsPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Inc()
 	bytesPerProtocolPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Add(packetSize)
