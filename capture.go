@@ -3,6 +3,7 @@ package main
 
 import (
 	"log"
+	"net"
 	"sync"
 
 	"github.com/google/gopacket"
@@ -17,6 +18,7 @@ var packetDataPool = sync.Pool{
 		}
 	},
 }
+var ipStringCache sync.Map
 
 type PacketData struct {
 	EthLayer      layers.Ethernet
@@ -64,12 +66,12 @@ func processPacket(packetData *PacketData, iface string) {
 	for _, layerType := range packetData.DecodedLayers {
 		switch layerType {
 		case layers.LayerTypeIPv4:
-			srcIP = packetData.Ip4Layer.SrcIP.String()
-			dstIP = packetData.Ip4Layer.DstIP.String()
+			srcIP = cachedIPString(packetData.Ip4Layer.SrcIP)
+			dstIP = cachedIPString(packetData.Ip4Layer.DstIP)
 			packetSize = float64(len(packetData.Ip4Layer.Payload))
 		case layers.LayerTypeIPv6:
-			srcIP = packetData.Ip6Layer.SrcIP.String()
-			dstIP = packetData.Ip6Layer.DstIP.String()
+			srcIP = cachedIPString(packetData.Ip6Layer.SrcIP)
+			dstIP = cachedIPString(packetData.Ip6Layer.DstIP)
 			packetSize = float64(len(packetData.Ip6Layer.Payload))
 		case layers.LayerTypeTCP:
 			protocol = "tcp"
@@ -102,4 +104,16 @@ func processPacket(packetData *PacketData, iface string) {
 
 	updatePacketCounter(iface, metricIP, srcIP, dstIP, protocol)
 	updateByteCounter(iface, metricIP, srcIP, dstIP, protocol, packetSize)
+}
+
+func cachedIPString(ip net.IP) string {
+	// Attempt to retrieve the cached string representation.
+	if ipStr, ok := ipStringCache.Load(ip.String()); ok {
+		return ipStr.(string)
+	}
+
+	// Convert to string and cache if not found.
+	ipStr := ip.String()
+	ipStringCache.Store(ip.String(), ipStr)
+	return ipStr
 }

@@ -76,8 +76,8 @@ func getNetworkDetails(interfaceName string) {
 			switch v := addr.(type) {
 			case *net.IPNet:
 				excludedIPsMu.Lock()
-				excludedIPs[v.IP.String()] = struct{}{}
-				fmt.Println("Adding ", v.IP.String, " to IP list")
+				excludedIPs[cachedIPString(v.IP)] = struct{}{}
+				fmt.Println("Adding ", cachedIPString(v.IP), " to IP list")
 				excludedIPsMu.Unlock()
 				subnetsMu.Lock()
 				subnets = append(subnets, v)
@@ -85,8 +85,8 @@ func getNetworkDetails(interfaceName string) {
 				subnetsMu.Unlock()
 			case *net.IPAddr:
 				excludedIPsMu.Lock()
-				excludedIPs[v.IP.String()] = struct{}{}
-				fmt.Println("Adding ", v.IP.String, " to IP list")
+				excludedIPs[cachedIPString(v.IP)] = struct{}{}
+				fmt.Println("Adding ", cachedIPString(v.IP), " to IP list")
 				excludedIPsMu.Unlock()
 			}
 		}
