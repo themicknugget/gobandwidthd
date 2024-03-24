@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -33,11 +35,17 @@ var (
 	}, []string{"ip", "dnsName"})
 	packetCounterCache sync.Map // Cache for packetsPerIP metrics
 	byteCounterCache   sync.Map // Cache for bytesPerProtocolPerIP metrics
+	metricLastUpdate   sync.Map // Cache for metric last update timestamp
+	pruneIntervalOnce  sync.Once
+	pruneInterval      time.Duration
 )
 
 func updatePacketCounter(iface, metricIP, srcIP, dstIP, protocol string) {
 	// Use metricIP in the cache key to differentiate metrics by the actual IP used for metrics.
 	key := iface + "|" + metricIP + "|" + srcIP + "|" + dstIP + "|" + protocol
+
+	// Update the last update time for the key
+	metricLastUpdate.Store(key, time.Now())
 
 	// Try to load the counter from cache
 	if val, ok := packetCounterCache.Load(key); ok {
@@ -73,4 +81,34 @@ func updateByteCounter(iface, metricIP, srcIP, dstIP, protocol string, packetSiz
 
 	byteCounterCache.Store(key, counter)
 	counter.Add(packetSize)
+}
+
+func cleanupStaleMetrics() {
+	pruneIntervalOnce.Do(func() {
+		var err error
+		pruneIntervalStr := os.Getenv("PRUNEINTERVAL")
+		if pruneIntervalStr == "" {
+			log.Println("PRUNEINTERVAL not set, defaulting to 5m")
+			pruneIntervalStr = "5m" // Default prune interval
+		}
+
+		pruneInterval, err = time.ParseDuration(pruneIntervalStr)
+		if err != nil {
+			log.Fatalf("Invalid PRUNEINTERVAL: %v", err)
+		}
+	})
+
+	for {
+		time.Sleep(1 * time.Minute) // Adjust frequency of cleanup checks as needed
+
+		cutoff := time.Now().Add(-pruneInterval)
+		metricLastUpdate.Range(func(key, value interface{}) bool {
+			lastUpdate := value.(time.Time)
+			if lastUpdate.Before(cutoff) {
+				metricLastUpdate.Delete(key)
+				packetCounterCache.Delete(key)
+			}
+			return true
+		})
+	}
 }

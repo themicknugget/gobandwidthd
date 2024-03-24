@@ -64,6 +64,8 @@ func main() {
 		}
 	}()
 
+	go cleanupStaleMetrics()
+
 	interfaces := os.Getenv("INTERFACES")
 	if interfaces == "" {
 		interfaces = "eth0"

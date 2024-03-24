@@ -24,6 +24,8 @@ func adjustGOGCDynamically() {
 			continue
 		}
 
+		usedMemoryMB := totalAlloc / (1024 * 1024)
+
 		// Calculate the percentage of used memory relative to total available memory.
 		// Note: v.Available is the available memory for the system, and v.Total is the total system memory.
 		// Adding totalAlloc to v.Available since we're interested in the memory headroom including our program's usage.
@@ -36,7 +38,7 @@ func adjustGOGCDynamically() {
 			debug.SetGCPercent(100) // Set GC back to default if not within the desired range.
 		}
 
-		log.Printf("Current memory usage: %.2f%%, GOGC set to: %d", usedMemoryPercent, debug.SetGCPercent(-1))
+		log.Printf("Current memory usage: %.2f%% (%.2fMB), GOGC set to: %d", usedMemoryPercent, usedMemoryMB, debug.SetGCPercent(-1))
 
 		time.Sleep(30 * time.Second) // Adjust as necessary.
 	}
