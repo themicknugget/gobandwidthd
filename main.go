@@ -121,8 +121,6 @@ func processPacket(packet gopacket.Packet, iface string) {
 
 // getNetworkDetails collects an interface's IP addresses and subnets.
 func getNetworkDetails(interfaceName string) {
-	var ips []net.IP
-	var subnets []*net.IPNet
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		fmt.Println("Error getting interfaces:", err)
@@ -144,12 +142,17 @@ func getNetworkDetails(interfaceName string) {
 			case *net.IPNet:
 				excludedIPsMu.Lock()
 				excludedIPs[v.IP.String()] = struct{}{}
+				fmt.Println("Adding ", v.IP.String, " to IP list")
 				excludedIPsMu.Unlock()
 				subnetsMu.Lock()
 				subnets = append(subnets, v)
+				fmt.Println("Adding ", v.String, " to subnet list")
 				subnetsMu.Unlock()
 			case *net.IPAddr:
-				ips = append(ips, v.IP)
+				excludedIPsMu.Lock()
+				excludedIPs[v.IP.String()] = struct{}{}
+				fmt.Println("Adding ", v.IP.String, " to IP list")
+				excludedIPsMu.Unlock()
 			}
 		}
 	}
