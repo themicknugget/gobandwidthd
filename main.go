@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof" // Import for side-effect of registering pprof handlers
 	"os"
 	"strings"
 	"sync"
@@ -36,6 +37,13 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 }
 
 func main() {
+	go func() {
+		log.Println("Starting profiling server on http://:6060")
+		if err := http.ListenAndServe(":6060", nil); err != nil {
+			log.Fatalf("Failed to start profiling server: %v", err)
+		}
+	}()
+
 	interfaces := os.Getenv("INTERFACES")
 	if interfaces == "" {
 		interfaces = "eth0"
