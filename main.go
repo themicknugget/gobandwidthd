@@ -42,6 +42,8 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 	decodedLayers := make([]gopacket.LayerType, 0, 10)
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	packetSource.DecodeOptions.Lazy = true
+	packetSource.DecodeOptions.NoCopy = true
 	for packet := range packetSource.Packets() {
 		err := parser.DecodeLayers(packet.Data(), &decodedLayers)
 		if err != nil {
