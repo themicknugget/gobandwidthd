@@ -22,20 +22,27 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 	packetSource.DecodeOptions.Lazy = true
 	packetSource.DecodeOptions.NoCopy = true
 
-	for packet := range packetSource.Packets() {
-		packetData := packetDataPool.Get().(*PacketData)
-		packetData.DecodedLayers = packetData.DecodedLayers[:0]
+	// Move the parser and layers outside the loop
+	packetData := packetDataPool.Get().(*PacketData)
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &packetData.EthLayer, &packetData.Ip4Layer, &packetData.Ip6Layer, &packetData.TcpLayer, &packetData.UdpLayer, &packetData.Icmp4Layer, &packetData.Icmp6Layer)
 
-		parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &packetData.EthLayer, &packetData.Ip4Layer, &packetData.Ip6Layer, &packetData.TcpLayer, &packetData.UdpLayer, &packetData.Icmp4Layer, &packetData.Icmp6Layer)
+	for packet := range packetSource.Packets() {
+		packetData.DecodedLayers = packetData.DecodedLayers[:0] // Reset decoded layers for the new packet
+
 		err := parser.DecodeLayers(packet.Data(), &packetData.DecodedLayers)
 		if err != nil {
-			packetDataPool.Put(packetData)
+			// Log or handle the error as needed
 			continue
 		}
 
 		processPacket(packetData, device)
-		packetDataPool.Put(packetData)
+
+		// Note: Since packetData is being reused, there's no need to put it back into the pool here.
+		// But ensure that packetData and its layers are not used after this point in any goroutine.
 	}
+
+	// Once done with capturing packets, put the packetData back into the pool.
+	packetDataPool.Put(packetData)
 }
 
 func processPacket(packetData *PacketData, iface string) {
