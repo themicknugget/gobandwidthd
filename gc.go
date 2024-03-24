@@ -31,12 +31,12 @@ func adjustGOGCDynamically() {
 		// Adding totalAlloc to v.Available since we're interested in the memory headroom including our program's usage.
 		usedMemoryPercent := (totalAlloc / float64(v.Available+uint64(totalAlloc))) * 100
 
-		// Check if we're using less than 10% of the available memory.
-		if usedMemoryPercent < 10 {
-			debug.SetGCPercent(1000) // Make GC less aggressive.
-		} else {
-			debug.SetGCPercent(100) // Set GC back to default if not within the desired range.
-		}
+		// // Check if we're using less than 10% of the available memory.
+		// if usedMemoryPercent < 10 {
+		// 	debug.SetGCPercent(1000) // Make GC less aggressive.
+		// } else {
+		// 	debug.SetGCPercent(100) // Set GC back to default if not within the desired range.
+		// }
 
 		log.Printf("Current memory usage: %.2f%% (%.2fMB), GOGC set to: %d", usedMemoryPercent, usedMemoryMB, debug.SetGCPercent(-1))
 
