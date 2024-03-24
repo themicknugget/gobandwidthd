@@ -55,6 +55,8 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 }
 
 func main() {
+	go adjustGOGCDynamically()
+
 	go func() {
 		log.Println("Starting profiling server on http://:6060")
 		if err := http.ListenAndServe(":6060", nil); err != nil {
