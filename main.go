@@ -13,7 +13,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -129,8 +128,9 @@ func processPacket(decodedLayers []gopacket.LayerType, eth *layers.Ethernet, ip4
 	queueDNSLookup(dstIP)
 
 	metricIP := checkIPSubnetMembership(srcIP, dstIP)
-	packetsPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Inc()
-	bytesPerProtocolPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Add(packetSize)
+
+	updatePacketCounter(iface, metricIP, srcIP, dstIP, protocol)
+	updateByteCounter(iface, metricIP, srcIP, dstIP, protocol, packetSize)
 }
 
 // getNetworkDetails collects an interface's IP addresses and subnets.
