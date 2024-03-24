@@ -11,7 +11,7 @@ permissions:
   packages: write
   
 jobs:
-  build-smartwatch:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,13 +32,12 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      -
-        name: Docker meta
+      - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
         with:
           images: |
-            ghcr.io/themicknugget/{{ github.event.repository.name }}
+            ghcr.io/themicknugget/${{ github.event.repository.name }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value={{branch}}-{{date 'YYYYMMDD'}}
