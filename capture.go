@@ -10,6 +10,25 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
+var packetDataPool = sync.Pool{
+	New: func() interface{} {
+		return &PacketData{
+			DecodedLayers: make([]gopacket.LayerType, 0, 10),
+		}
+	},
+}
+
+type PacketData struct {
+	EthLayer      layers.Ethernet
+	Ip4Layer      layers.IPv4
+	Ip6Layer      layers.IPv6
+	TcpLayer      layers.TCP
+	UdpLayer      layers.UDP
+	Icmp4Layer    layers.ICMPv4
+	Icmp6Layer    layers.ICMPv6
+	DecodedLayers []gopacket.LayerType
+}
+
 func capturePackets(device string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	handle, err := pcap.OpenLive(device, 1600, true, pcap.BlockForever)
@@ -18,31 +37,24 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 	}
 	defer handle.Close()
 
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	packetSource.DecodeOptions.Lazy = true
-	packetSource.DecodeOptions.NoCopy = true
-
-	// Move the parser and layers outside the loop
+	// Reuse PacketData and parser for zero-copy packet processing
 	packetData := packetDataPool.Get().(*PacketData)
+	defer packetDataPool.Put(packetData)
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &packetData.EthLayer, &packetData.Ip4Layer, &packetData.Ip6Layer, &packetData.TcpLayer, &packetData.UdpLayer, &packetData.Icmp4Layer, &packetData.Icmp6Layer)
 
-	for packet := range packetSource.Packets() {
-		packetData.DecodedLayers = packetData.DecodedLayers[:0] // Reset decoded layers for the new packet
-
-		err := parser.DecodeLayers(packet.Data(), &packetData.DecodedLayers)
+	for {
+		data, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
-			// Log or handle the error as needed
+			log.Printf("Error reading packet data: %v", err)
+			continue
+		}
+		packetData.DecodedLayers = packetData.DecodedLayers[:0]
+		if err := parser.DecodeLayers(data, &packetData.DecodedLayers); err != nil {
 			continue
 		}
 
 		processPacket(packetData, device)
-
-		// Note: Since packetData is being reused, there's no need to put it back into the pool here.
-		// But ensure that packetData and its layers are not used after this point in any goroutine.
 	}
-
-	// Once done with capturing packets, put the packetData back into the pool.
-	packetDataPool.Put(packetData)
 }
 
 func processPacket(packetData *PacketData, iface string) {
@@ -90,6 +102,4 @@ func processPacket(packetData *PacketData, iface string) {
 
 	updatePacketCounter(iface, metricIP, srcIP, dstIP, protocol)
 	updateByteCounter(iface, metricIP, srcIP, dstIP, protocol, packetSize)
-
-	// Additional processing logic remains unchanged...
 }
