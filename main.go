@@ -113,8 +113,8 @@ func processPacket(packet gopacket.Packet, iface string) {
 	} else {
 		metricIP = dstIP
 	}
-	packetsPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "protocol": protocol}).Inc()
-	bytesPerProtocolPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "protocol": protocol}).Add(packetSize)
+	packetsPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Inc()
+	bytesPerProtocolPerIP.With(prometheus.Labels{"interface": iface, "ip": metricIP, "srcip": srcIP, "dstip": dstIP, "protocol": protocol}).Add(packetSize)
 }
 
 // getNetworkDetails collects an interface's IP addresses and subnets.
