@@ -19,7 +19,7 @@ var subnets []*net.IPNet
 var subnetsMu sync.RWMutex
 
 func main() {
-	go adjustGOGCDynamically()
+	// go adjustGOGCDynamically()
 
 	go func() {
 		log.Println("Starting profiling server on http://:6060")
