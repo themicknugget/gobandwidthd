@@ -9,12 +9,12 @@ var (
 	packetsPerIP = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "bandwidth_packets_total",
 		Help: "Total number of packets by IP address and protocol, separated by interface.",
-	}, []string{"interface", "ip", "protocol"})
+	}, []string{"interface", "ip", "srcip", "dstip", "protocol"})
 
 	bytesPerProtocolPerIP = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "bandwidth_bytes_total",
 		Help: "Total number of bytes transferred by IP address and protocol, separated by interface.",
-	}, []string{"interface", "ip", "protocol"})
+	}, []string{"interface", "ip", "srcip", "dstip", "protocol"})
 
 	dnsNames = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "bandwidth_dns_names",
