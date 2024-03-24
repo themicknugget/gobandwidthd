@@ -10,14 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-type metricKey struct {
-	iface    string
-	ip       string
-	srcIP    string
-	dstIP    string
-	protocol string
-}
-
 var (
 	packetsPerIP = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "bandwidth_packets_total",
@@ -35,7 +27,7 @@ var (
 	}, []string{"ip", "dnsName"})
 	packetCounterCache sync.Map // Cache for packetsPerIP metrics
 	byteCounterCache   sync.Map // Cache for bytesPerProtocolPerIP metrics
-	metricLastUpdate   sync.Map // Cache for metric last update timestamp
+	lastAccessMap      sync.Map // Cache for metric last update timestamp
 	pruneIntervalOnce  sync.Once
 	pruneInterval      time.Duration
 )
@@ -44,11 +36,10 @@ func updatePacketCounter(iface, metricIP, srcIP, dstIP, protocol string) {
 	// Use metricIP in the cache key to differentiate metrics by the actual IP used for metrics.
 	key := iface + "|" + metricIP + "|" + srcIP + "|" + dstIP + "|" + protocol
 
-	// Update the last update time for the key
-	metricLastUpdate.Store(key, time.Now())
-
 	// Try to load the counter from cache
 	if val, ok := packetCounterCache.Load(key); ok {
+		// Update the last access time for the key
+		lastAccessMap.Store(key, time.Now())
 		val.(prometheus.Counter).Inc()
 		return
 	}
@@ -83,7 +74,7 @@ func updateByteCounter(iface, metricIP, srcIP, dstIP, protocol string, packetSiz
 	counter.Add(packetSize)
 }
 
-func cleanupStaleMetrics() {
+func cleanupStaleMap() {
 	pruneIntervalOnce.Do(func() {
 		var err error
 		pruneIntervalStr := os.Getenv("PRUNEINTERVAL")
@@ -102,10 +93,10 @@ func cleanupStaleMetrics() {
 		time.Sleep(1 * time.Minute) // Adjust frequency of cleanup checks as needed
 
 		cutoff := time.Now().Add(-pruneInterval)
-		metricLastUpdate.Range(func(key, value interface{}) bool {
-			lastUpdate := value.(time.Time)
-			if lastUpdate.Before(cutoff) {
-				metricLastUpdate.Delete(key)
+		lastAccessMap.Range(func(key, value interface{}) bool {
+			lastAccess := value.(time.Time)
+			if lastAccess.Before(cutoff) {
+				lastAccessMap.Delete(key)
 				packetCounterCache.Delete(key)
 			}
 			return true

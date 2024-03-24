@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -109,6 +110,8 @@ func processPacket(packetData *PacketData, iface string) {
 func cachedIPString(ip net.IP) string {
 	// Attempt to retrieve the cached string representation.
 	if ipStr, ok := ipStringCache.Load(ip.String()); ok {
+		// Update the last update time for the key
+		lastAccessMap.Store(ipStr, time.Now())
 		return ipStr.(string)
 	}
 

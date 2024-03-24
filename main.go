@@ -28,7 +28,7 @@ func main() {
 		}
 	}()
 
-	go cleanupStaleMetrics()
+	go cleanupStaleMap()
 
 	interfaces := os.Getenv("INTERFACES")
 	if interfaces == "" {
