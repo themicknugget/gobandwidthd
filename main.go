@@ -47,7 +47,7 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 	for packet := range packetSource.Packets() {
 		err := parser.DecodeLayers(packet.Data(), &decodedLayers)
 		if err != nil {
-			log.Printf("Error decoding packet: %v", err)
+			// log.Printf("Error decoding packet: %v", err)
 			continue
 		}
 
