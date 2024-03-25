@@ -20,7 +20,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o gobandwidth .
 FROM debian:12-slim
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y libpcap-dev ndpi-dev liblinear-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libpcap-dev libndpi-dev liblinear-dev && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/gobandwidth /gobandwidth
 
