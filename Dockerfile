@@ -1,14 +1,8 @@
-# Build stage with libpcap-dev, ndpi-dev, and liblinear-dev from Alpine Edge
-FROM golang:1.20-alpine AS builder
-
-# Add Edge repository for ndpi and liblinear packages
-RUN echo "@edge http://nl.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
-RUN echo "@edge http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
-RUN echo "@edge http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
+# Build stage with libpcap-dev installed
+FROM golang:1.22-bookworm AS builder
 
 # Install build dependencies
-# Use the @edge tag for packages only available in the edge repository
-RUN apk add --no-cache gcc musl-dev libpcap-dev ndpi-dev@edge liblinear-dev@edge
+RUN apt-get update && apt-get install -y gcc libpcap-dev ndpi-dev liblinear-dev
 
 WORKDIR /app
 
@@ -22,16 +16,11 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o gobandwidth .
 
-# Final stage using a specific version of Alpine
-FROM alpine
+# Final stage
+FROM debian:12-slim
 
-# Add Edge repository for runtime dependencies, if needed
-RUN echo "@edge http://nl.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
-RUN echo "@edge http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
-RUN echo "@edge http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
-
-# Install runtime dependencies with @edge tag if they are from edge repository
-RUN apk --no-cache add libpcap ndpi@edge liblinear@edge
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y libpcap-dev ndpi-dev liblinear-dev && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/gobandwidth /gobandwidth
 
