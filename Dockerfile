@@ -2,7 +2,7 @@
 FROM golang:1.20-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev libpcap-dev
+RUN apk add --no-cache gcc musl-dev libpcap-dev ndpi-dev
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o gobandwidth .
 FROM alpine
 
 # Install runtime dependencies
-RUN apk --no-cache add libpcap-dev
+RUN apk --no-cache add libpcap-dev ndpi-dev
 
 COPY --from=builder /app/gobandwidth /gobandwidth
 
