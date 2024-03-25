@@ -2,7 +2,7 @@
 FROM golang:1.22-bookworm AS builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y gcc musl-dev liblinear-dev libpcap-dev git automake cmake make
+RUN apt-get update && apt-get install -y gcc musl-dev liblinear-dev libpcap-dev libtool git automake cmake make
 
 # Clone and build a specific version of nDPI
 WORKDIR /ndpi
