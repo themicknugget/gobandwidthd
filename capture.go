@@ -57,6 +57,7 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 		}
 
 		processPacket(packetData, device)
+		time.Sleep(10 * time.Millisecond) // Introduce a small delay to reduce CPU usage
 	}
 }
 
