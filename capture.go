@@ -98,9 +98,6 @@ func processPacket(packetData *PacketData, iface string) {
 		return // Ignore this packet
 	}
 
-	queueDNSLookup(srcIP)
-	queueDNSLookup(dstIP)
-
 	metricIP := checkIPSubnetMembership(srcIP, dstIP)
 
 	updatePacketCounter(iface, metricIP, srcIP, dstIP, protocol)
