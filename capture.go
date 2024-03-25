@@ -34,9 +34,37 @@ type PacketData struct {
 
 func capturePackets(device string, wg *sync.WaitGroup) {
 	defer wg.Done()
-	handle, err := pcap.OpenLive(device, 1600, true, pcap.BlockForever)
+	// Create a new InactiveHandle
+	inact, err := pcap.NewInactiveHandle(device)
 	if err != nil {
-		log.Fatalf("Could not open device %s: %v", device, err)
+		log.Fatalf("Could not create inactive handle: %v", err)
+	}
+	defer inact.CleanUp()
+
+	// Set the snapshot length to 1600 bytes
+	if err := inact.SetSnapLen(1600); err != nil {
+		log.Fatalf("Could not set snapshot length: %v", err)
+	}
+
+	// Set the interface in promiscuous mode
+	if err := inact.SetPromisc(true); err != nil {
+		log.Fatalf("Could not set promiscuous mode: %v", err)
+	}
+
+	// Set the timeout to block indefinitely
+	if err := inact.SetTimeout(pcap.BlockForever); err != nil {
+		log.Fatalf("Could not set timeout: %v", err)
+	}
+
+	// Set the buffer size (e.g., 10 MiB)
+	if err := inact.SetBufferSize(1024 * 1024 * 10); err != nil {
+		log.Fatalf("Could not set buffer size: %v", err)
+	}
+
+	// Activate the handle
+	handle, err := inact.Activate()
+	if err != nil {
+		log.Fatalf("Could not activate handle: %v", err)
 	}
 	defer handle.Close()
 
@@ -57,7 +85,7 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 		}
 
 		processPacket(packetData, device)
-		time.Sleep(10 * time.Millisecond) // Introduce a small delay to reduce CPU usage
+		time.Sleep(100 * time.Millisecond) // Introduce a small delay to reduce CPU usage
 	}
 }
 
