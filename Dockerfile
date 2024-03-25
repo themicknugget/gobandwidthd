@@ -2,7 +2,7 @@
 FROM golang:1.22-bookworm AS builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y gcc libpcap-dev ndpi-dev liblinear-dev
+RUN apt-get update && apt-get install -y gcc libpcap-dev libndpi-dev liblinear-dev
 
 WORKDIR /app
 
