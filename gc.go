@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"runtime"
-	"runtime/debug"
 	"time"
 
 	"github.com/shirou/gopsutil/mem"
@@ -38,7 +37,7 @@ func adjustGOGCDynamically() {
 		// 	debug.SetGCPercent(100) // Set GC back to default if not within the desired range.
 		// }
 
-		log.Printf("Current memory usage: %.2f%% (%.2fMB), GOGC set to: %d", usedMemoryPercent, usedMemoryMB, debug.SetGCPercent(-1))
+		log.Printf("Current memory usage: %.2f%% (%.2fMB)", usedMemoryPercent, usedMemoryMB)
 
 		time.Sleep(30 * time.Second) // Adjust as necessary.
 	}

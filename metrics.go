@@ -98,6 +98,8 @@ func cleanupStaleMap() {
 			if lastAccess.Before(cutoff) {
 				lastAccessMap.Delete(key)
 				packetCounterCache.Delete(key)
+				byteCounterCache.Delete(key)
+				ipStringCache.Delete(key)
 			}
 			return true
 		})
