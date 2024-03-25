@@ -10,6 +10,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	godpi "github.com/mushorg/go-dpi"
+	"github.com/mushorg/go-dpi/types"
 )
 
 var packetDataPool = sync.Pool{
@@ -34,6 +36,7 @@ type PacketData struct {
 
 func capturePackets(device string, wg *sync.WaitGroup) {
 	defer wg.Done()
+
 	// Create a new InactiveHandle
 	inact, err := pcap.NewInactiveHandle(device)
 	if err != nil {
@@ -51,14 +54,9 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 		log.Fatalf("Could not set promiscuous mode: %v", err)
 	}
 
-	// Set the timeout to block indefinitely
+	// Set the timeout
 	if err := inact.SetTimeout(pcap.BlockForever); err != nil {
 		log.Fatalf("Could not set timeout: %v", err)
-	}
-
-	// Set the buffer size (e.g., 10 MiB)
-	if err := inact.SetBufferSize(1024 * 1024 * 10); err != nil {
-		log.Fatalf("Could not set buffer size: %v", err)
 	}
 
 	// Activate the handle
@@ -68,63 +66,65 @@ func capturePackets(device string, wg *sync.WaitGroup) {
 	}
 	defer handle.Close()
 
-	// Reuse PacketData and parser for zero-copy packet processing
-	packetData := packetDataPool.Get().(*PacketData)
-	defer packetDataPool.Put(packetData)
-	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &packetData.EthLayer, &packetData.Ip4Layer, &packetData.Ip6Layer, &packetData.TcpLayer, &packetData.UdpLayer, &packetData.Icmp4Layer, &packetData.Icmp6Layer)
-
-	for {
-		data, _, err := handle.ZeroCopyReadPacketData()
-		if err != nil {
-			log.Printf("Error reading packet data: %v", err)
-			continue
-		}
-		packetData.DecodedLayers = packetData.DecodedLayers[:0]
-		if err := parser.DecodeLayers(data, &packetData.DecodedLayers); err != nil {
-			continue
-		}
-
-		processPacket(packetData, device)
-		time.Sleep(100 * time.Millisecond) // Introduce a small delay to reduce CPU usage
+	// Create a packet source to read packets
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for packet := range packetSource.Packets() {
+		processPacket(packet, device) // Adjust the processPacket signature accordingly
 	}
 }
 
-func processPacket(packetData *PacketData, iface string) {
+func processPacket(packet gopacket.Packet, iface string) {
 	var srcIP, dstIP, protocol string
-	var packetSize float64
 
-	for _, layerType := range packetData.DecodedLayers {
-		switch layerType {
-		case layers.LayerTypeIPv4:
-			srcIP = cachedIPString(packetData.Ip4Layer.SrcIP)
-			dstIP = cachedIPString(packetData.Ip4Layer.DstIP)
-			packetSize = float64(len(packetData.Ip4Layer.Payload))
-		case layers.LayerTypeIPv6:
-			srcIP = cachedIPString(packetData.Ip6Layer.SrcIP)
-			dstIP = cachedIPString(packetData.Ip6Layer.DstIP)
-			packetSize = float64(len(packetData.Ip6Layer.Payload))
-		case layers.LayerTypeTCP:
-			protocol = "tcp"
-		case layers.LayerTypeUDP:
-			protocol = "udp"
-		case layers.LayerTypeICMPv4:
-			protocol = "icmpv4"
-		case layers.LayerTypeICMPv6:
-			protocol = "icmpv6"
+	packetSize := float64(len(packet.Data()))
+
+	// Handling IPv4
+	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
+		ip, _ := ipLayer.(*layers.IPv4)
+		srcIP = cachedIPString(ip.SrcIP)
+		dstIP = cachedIPString(ip.DstIP)
+	}
+
+	// Handling IPv6
+	if ip6Layer := packet.Layer(layers.LayerTypeIPv6); ip6Layer != nil {
+		ip6, _ := ip6Layer.(*layers.IPv6)
+		srcIP = cachedIPString(ip6.SrcIP)
+		dstIP = cachedIPString(ip6.DstIP)
+	}
+
+	// Handling TCP
+	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+		protocol += "+TCP"
+	}
+
+	// Handling UDP
+	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
+		protocol += "+UDP"
+	}
+
+	// Handling ICMP for IPv4
+	if icmpLayer := packet.Layer(layers.LayerTypeICMPv4); icmpLayer != nil {
+		protocol += "+ICMPv4"
+	}
+
+	// Handling ICMP for IPv6
+	if icmpv6Layer := packet.Layer(layers.LayerTypeICMPv6); icmpv6Layer != nil {
+		protocol += "+ICMPv6"
+	}
+
+	// Handling ARP
+	if arpLayer := packet.Layer(layers.LayerTypeARP); arpLayer != nil {
+		protocol = "ARP" // Note: ARP does not operate over IPv6
+	}
+
+	// DPI with go-dpi, if applicable
+	flow, _ := godpi.GetPacketFlow(packet)
+	result := godpi.ClassifyFlow(flow)
+	if result.Protocol != types.Unknown {
+		if protocol != "" {
+			protocol += "+"
 		}
-	}
-
-	if srcIP == "" || dstIP == "" {
-		return
-	}
-
-	// Filter out packets where the src or dst IP matches the interface's IPs
-	excludedIPsMu.RLock()
-	_, srcIPExcluded := excludedIPs[srcIP]
-	_, dstIPExcluded := excludedIPs[dstIP]
-	excludedIPsMu.RUnlock()
-	if srcIPExcluded || dstIPExcluded {
-		return // Ignore this packet
+		protocol += result.Protocol.String()
 	}
 
 	metricIP := checkIPSubnetMembership(srcIP, dstIP)

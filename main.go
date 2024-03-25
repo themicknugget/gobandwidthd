@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/mushorg/go-dpi"
 )
 
 var excludedIPs = make(map[string]struct{})
@@ -29,6 +30,12 @@ func main() {
 	}()
 
 	go cleanupStaleMap()
+
+	// Initialize go-dpi (if not already done in main or elsewhere)
+	if err := godpi.Initialize(); err != nil {
+		log.Fatalf("Could not initialize go-dpi: %v", err)
+	}
+	defer godpi.Destroy()
 
 	interfaces := os.Getenv("INTERFACES")
 	if interfaces == "" {
